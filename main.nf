@@ -44,6 +44,13 @@ process bwa_index {
     """
 }
 
+process fastq_screen{
+    tag "FASTQ_SCREEN on $sample_id of data"
+    publishDir "${params.outdir/screen", mode: 'copy'
+
+}
+
+
 process bwa_map {
     tag "BWA_MEM on $sample_id of data"
     publishDir "${params.outdir}/sam_files", mode: 'copy'
@@ -51,7 +58,7 @@ process bwa_map {
     cpus params.thread
 
     input:
-    set sample_id, file(reads) from read_pairs_ch
+    set sample_id, file(reads) from read_pairs2_ch
     file(reference) from index_ch
 
     output:
@@ -61,3 +68,4 @@ process bwa_map {
     bwa mem reference ${reads[0]} ${reads[1]} -t ${params.thread} > ${sample_id}.sam
     """
 }
+
