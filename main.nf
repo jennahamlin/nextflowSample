@@ -15,8 +15,8 @@ params.outdir = "$HOME/results"
 params.thread = 1
 
 println """\
-         M A P P I N G - N F   P I P E L I N E
-         =====================================
+         G E N O M E - A S S E M B L Y  - N F 
+         ====================================
          ref	      : ${params.ref}
 	 reads        : ${params.reads}
          outdir       : ${params.outdir}
@@ -44,19 +44,51 @@ process bwa_index {
     """
 }
 
+process fastqc_raw {
+    tag "FASTQC on raw $sample_id reads"
+    publishDir "${params.outdir}/raw_fastqc", mode: 'copy' 
+
+    input:
+    set sample_id, file(reads) from reads_ch
+
+    output:
+    file "*_fastqc.{zip,html}" into fastqc_raw_ch
+
+    script:
+    """
+    fastqc -q ${reads[0]} ${reads[1]}
+    """
+}
+
 process trim_galore {
 
     tag "TRIM_GALORE on $sample_id"
     publishDir "${params.outdir}/trim_files", mode: 'copy'
 
     input:
-    set sample_id, file(reads) from reads_ch
+    set sample_id, file(reads) from reads2_ch
     
     output: 
-    set sample_id, file("*.fq.gz") into trim_ch
+    set sample_id, file("*.fq.gz") into trim_ch, trim2_ch, trim3_ch
 
     """
     trim_galore --paired ${reads[0]} ${reads[1]}
+    """
+}
+
+process fastqc_trim {
+    tag "FASTQC on trimmed $sample_id reads"
+    publishDir "${params.outdir}/trim_fastqc", mode: 'copy'
+
+    input:
+    set sample_id, file(reads) from trim_ch
+
+    output:
+    file "*_fastqc.{zip,html}" into fastqc_trim_ch
+
+    script:
+    """
+    fastqc -q ${reads[0]} ${reads[1]}
     """
 }
 
@@ -66,7 +98,7 @@ process fastq_screen {
     publishDir "${params.outdir}/screen", mode: 'copy'
 
     input:
-    set sample_id, file(reads_trimmed) from trim_ch
+    set sample_id, file(reads_trimmed) from trim2_ch
  
     output:
     set sample_id, file("*.html") into screenHTMl_ch
@@ -75,25 +107,52 @@ process fastq_screen {
     """
     fastq_screen \
     --conf /scicomp/home-pure/ptx4/db/fastq_screen_genomes/fastq_screen.conf \
+    --tag --filter 000000 \
     ${reads_trimmed[0]} ${reads_trimmed[1]}
     """
 }
 
-process bwa_map {
- 
-    tag "BWA_MEM on $sample_id of data"
-    publishDir "${params.outdir}/sam_files", mode: 'copy'
- 
-    cpus params.thread
+process unicycler {
+    tag "UNICYCLER on trimmed reads of $sample_id"
+    publishDir "${params.outdir}/unicycler", mode: 'copy'
 
     input:
-    set sample_id, file(reads) from reads2_ch
-    file(reference) from index_ch
+    set sample_id, file(reads) from trim3_ch
 
     output:
-    set sample_id, file("*.sam") into sam_ch
-
+    set sample_id, file("${sample_id}_assembly.fasta") into (quast_ch, prokka_ch)
+    file("${sample_id}_assembly.gfa")
+    file("${sample_id}_unicycler.log")
+    file("unicycler.version.txt") into unicycler_ver_ch
+    
+    script:
     """
-    bwa mem reference ${reads[0]} ${reads[1]} -t ${params.thread} > ${sample_id}.sam
+    unicycler -1 ${reads[0]} -2 ${reads[1]} --keep 0 -o .
+    mv unicycler.log ${sample_id}_unicycler.log
+    # rename so that quast can use the name 
+     mv assembly.gfa ${sample_id}_assembly.gfa
+    mv assembly.fasta ${sample_id}_assembly.fasta
+    unicycler --version | sed -e "s/Unicycler v//g" > unicycler.version.txt
     """
 }
+
+/*
+*process bwa_map {
+* 
+*    tag "BWA_MEM on $sample_id of data"
+*    publishDir "${params.outdir}/sam_files", mode: 'copy'
+* 
+*    cpus params.thread
+*
+*    input:
+*    set sample_id, file(reads) from reads2_ch
+*    file(reference) from index_ch
+*
+*    output:
+*    set sample_id, file("*.sam") into sam_ch
+*
+*    """
+*    bwa mem reference ${reads[0]} ${reads[1]} -t ${params.thread} > ${sample_id}.sam
+*    """
+*}
+*/
