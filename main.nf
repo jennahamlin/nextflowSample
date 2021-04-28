@@ -13,6 +13,7 @@ params.ref = "$baseDir/ref/u.parvumRef.fa"
 params.reads = "$baseDir/data/*_R{1,2}_001.fastq.gz"
 params.outdir = "$HOME/results"
 params.thread = 1
+params.fastqDB = "$HOME"
 
 println """\
          G E N O M E - A S S E M B L Y  - N F 
@@ -106,7 +107,7 @@ process fastq_screen {
 
     """
     fastq_screen \
-    --conf /scicomp/home-pure/ptx4/db/fastq_screen_genomes/fastq_screen.conf \
+    --conf ${params.fastqDB} \
     --tag --filter 000000 \
     ${reads_trimmed[0]} ${reads_trimmed[1]}
     """
@@ -130,11 +131,14 @@ process unicycler {
     unicycler -1 ${reads[0]} -2 ${reads[1]} --keep 0 -o .
     mv unicycler.log ${sample_id}_unicycler.log
     # rename so that quast can use the name 
-     mv assembly.gfa ${sample_id}_assembly.gfa
+    mv assembly.gfa ${sample_id}_assembly.gfa
     mv assembly.fasta ${sample_id}_assembly.fasta
     unicycler --version | sed -e "s/Unicycler v//g" > unicycler.version.txt
     """
 }
+
+
+
 
 /*
 *process bwa_map {
